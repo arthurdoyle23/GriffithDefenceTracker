@@ -59,6 +59,7 @@ export default function YearStrip({ events, allEvents, year, setYear }) {
             className="year"
             aria-pressed={year === y}
             aria-label={`${y}: ${counts[y] ?? 0} events`}
+            title={`${y}: ${counts[y] ?? 0} events`}
             onClick={() => {
               setPlaying(false);
               setYear(year === y ? null : y);

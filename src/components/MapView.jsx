@@ -34,6 +34,8 @@ const baseStyle = () => ({
       source: 'world',
       paint: { 'fill-color': ['case', ['get', 'host'], css('--host-land'), css('--land')] },
     },
+    // A faint cross-hatch over the land, drawn by drawLandTexture.
+    { id: 'land-texture', type: 'fill', source: 'world', paint: { 'fill-pattern': 'land-texture' } },
     {
       id: 'states',
       type: 'line',
@@ -106,6 +108,24 @@ function drawLabelImage(map, id) {
     ctx.stroke();
   }
   map.addImage(id, ctx.getImageData(0, 0, w * scale, h * scale), { pixelRatio: scale });
+}
+
+function drawLandTexture(map) {
+  const size = 10;
+  const scale = 2;
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.canvas.width = ctx.canvas.height = size * scale;
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = css('--land-texture');
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  // Two diagonals that tile seamlessly.
+  ctx.moveTo(0, size);
+  ctx.lineTo(size, 0);
+  ctx.moveTo(0, 0);
+  ctx.lineTo(size, size);
+  ctx.stroke();
+  map.addImage('land-texture', ctx.getImageData(0, 0, size * scale, size * scale), { pixelRatio: scale });
 }
 
 function addLabelLayers(map) {
@@ -214,6 +234,7 @@ export default function MapView({ events, selected, onSelect, onStack }) {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.on('styleimagemissing', (e) => {
       if (e.id.startsWith('lbl|')) drawLabelImage(map, e.id);
+      else if (e.id === 'land-texture') drawLandTexture(map);
     });
 
     const hover = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 16, className: 'hover-popup', maxWidth: '280px' });
@@ -293,7 +314,7 @@ export default function MapView({ events, selected, onSelect, onStack }) {
       map.setPaintProperty('borders', 'line-color', css('--border-strong'));
       map
         .listImages()
-        .filter((id) => id.startsWith('lbl|'))
+        .filter((id) => id.startsWith('lbl|') || id === 'land-texture')
         .forEach((id) => map.removeImage(id));
       map.triggerRepaint();
     };

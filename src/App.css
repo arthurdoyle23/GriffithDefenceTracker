@@ -5,6 +5,7 @@
   --border: #b9d0a0;
   --host-land: #f7e2b0;
   --border-strong: #8fa877;
+  --land-texture: rgba(46, 84, 30, 0.065);
   --clu: #1f3d73;
   --panel: #ffffff;
   --panel-2: #f3f5f6;
@@ -35,6 +36,7 @@
     --border: #36593f;
     --host-land: #7a6a3c;
     --border-strong: #5f8466;
+    --land-texture: rgba(255, 255, 255, 0.04);
     --clu: #3f72d6;
     --panel: #131d26;
     --panel-2: #1a2632;
@@ -66,7 +68,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   position: absolute; z-index: 5;
   top: calc(var(--gap) + env(safe-area-inset-top, 0px));
   left: calc(var(--gap) + env(safe-area-inset-left, 0px));
-  bottom: 84px; width: var(--panel-w);
+  bottom: calc(var(--gap) + env(safe-area-inset-bottom, 0px)); width: var(--panel-w);
   display: flex; flex-direction: column; overflow: hidden;
   background: var(--panel); border-radius: 14px; box-shadow: var(--shadow);
 }
@@ -180,26 +182,27 @@ h1 { margin: 4px 0 0; font: 750 24px/1.05 var(--display); font-stretch: 82%; let
 .card a { color: var(--accent); font-weight: 500; text-decoration: none; overflow-wrap: anywhere; }
 
 /* ---------- Year strip ---------- */
+/* A compact strip beside the panel rather than across the whole map. */
 .years {
-  position: absolute; z-index: 5; height: 60px;
-  left: calc(var(--gap) + env(safe-area-inset-left, 0px));
-  right: calc(var(--gap) + env(safe-area-inset-right, 0px));
+  position: absolute; z-index: 5; height: 44px;
+  left: calc(var(--panel-w) + var(--gap) * 2 + env(safe-area-inset-left, 0px));
+  width: min(520px, calc(100% - var(--panel-w) - var(--gap) * 3));
   bottom: calc(var(--gap) + env(safe-area-inset-bottom, 0px));
-  display: flex; align-items: stretch; gap: 10px; padding: 0 14px;
+  display: flex; align-items: stretch; gap: 8px; padding: 0 10px 0 6px;
   background: var(--panel); border-radius: 14px; box-shadow: var(--shadow);
 }
 .years__play {
-  align-self: center; flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0;
+  align-self: center; flex: none; width: 32px; height: 32px; border-radius: 50%; border: 0;
   display: grid; place-items: center; background: var(--ink); color: var(--panel);
 }
-.years__all { align-self: center; flex: none; border: 1px solid var(--rule); background: none; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; }
+.years__all { align-self: center; flex: none; border: 1px solid var(--rule); background: none; border-radius: 8px; padding: 5px 8px; font-size: 12px; }
 .years__all[aria-pressed='true'] { border-color: var(--ink); font-weight: 600; }
-.years__bars { flex: 1; min-width: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; padding: 7px 0 6px; }
+.years__bars { flex: 1; min-width: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 6px 0 5px; }
 .year { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; background: none; border: 0; padding: 0; }
-.year__count { font: 500 10px/1 var(--mono); color: var(--ink-3); }
-.year__track { height: 22px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
-.year__fill { width: 100%; max-width: 54px; border-radius: 3px 3px 0 0; background: var(--ink-3); opacity: 0.45; transition: height 0.25s, opacity 0.2s; }
-.year__label { font: 500 11px/1 var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.year__count { display: none; }
+.year__track { height: 16px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.year__fill { width: 100%; max-width: 40px; border-radius: 3px 3px 0 0; background: var(--ink-3); opacity: 0.45; transition: height 0.25s, opacity 0.2s; }
+.year__label { font: 500 10.5px/1 var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .year:hover .year__fill { opacity: 0.75; }
 .year[aria-pressed='true'] .year__fill { background: var(--accent); opacity: 1; }
 .year[aria-pressed='true'] .year__label { color: var(--ink); font-weight: 600; }
@@ -207,7 +210,7 @@ h1 { margin: 4px 0 0; font: 750 24px/1.05 var(--display); font-stretch: 82%; let
 /* ---------- Map overlays ---------- */
 /* Cluster bubbles: the first mock-up's rule (the default button bevel is part of the look), in navy instead of near-black. */
 .clu { display: grid; place-items: center; border-radius: 50%; color: #fff; font: 600 12px/1 var(--mono); background: var(--clu); box-shadow: 0 0 0 3px color-mix(in srgb, var(--clu) 25%, transparent); cursor: pointer; font-variant-numeric: tabular-nums; }
-.maplibregl-ctrl-bottom-right { bottom: 78px; right: env(safe-area-inset-right, 0px); }
+.maplibregl-ctrl-bottom-right { bottom: 0; right: env(safe-area-inset-right, 0px); }
 .maplibregl-ctrl-group { background: var(--panel); box-shadow: var(--shadow) !important; border-radius: 10px; }
 .maplibregl-ctrl-group button + button { border-top-color: var(--rule); }
 .maplibregl-ctrl-attrib { background: color-mix(in srgb, var(--panel) 80%, transparent) !important; color: var(--ink-3); }
@@ -246,10 +249,9 @@ h1 { margin: 4px 0 0; font: 750 24px/1.05 var(--display); font-stretch: 82%; let
   .search, .tabs { margin-left: 16px; margin-right: 16px; }
   .panel__scroll { padding-left: 16px; padding-right: 16px; }
   .event[aria-current='true'] { margin: 0 -16px; padding: 11px 16px; width: calc(100% + 32px); }
-  .years { top: calc(var(--gap) + env(safe-area-inset-top, 0px)); bottom: auto; height: 52px; gap: 6px; padding: 0 8px; }
+  .years { top: calc(var(--gap) + env(safe-area-inset-top, 0px)); bottom: auto; left: var(--gap); width: auto; right: var(--gap); height: 44px; gap: 6px; padding: 0 8px 0 6px; }
   .years__all { padding: 6px 7px; font-size: 11.5px; }
-  .years__play { width: 32px; height: 32px; }
-  .year__count { display: none; }
+  .years__play { width: 30px; height: 30px; }
   .card { left: var(--gap); right: var(--gap); width: auto; top: 72px; max-height: calc(50% - 82px); }
   .maplibregl-ctrl-bottom-right { display: none; }
 }
