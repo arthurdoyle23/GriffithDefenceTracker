@@ -1,10 +1,10 @@
 /* Full-bleed map, a docked panel on the left (bottom sheet on phones), an event card on the right and a year strip along the bottom. */
 :root {
   --sea: #9fd6ec;
-  --land: #fbf8f0;
-  --border: #dccfb6;
-  --host-land: #f7e6bd;
-  --border-strong: #b9a885;
+  --land: #d6eac0;
+  --border: #b9d0a0;
+  --host-land: #f7e2b0;
+  --border-strong: #8fa877;
   --clu: #1f3d73;
   --panel: #ffffff;
   --panel-2: #f3f5f6;
@@ -31,10 +31,10 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --sea: #0f3a57;
-    --land: #22374a;
-    --border: #36536b;
-    --host-land: #3e5468;
-    --border-strong: #5b768e;
+    --land: #24432f;
+    --border: #36593f;
+    --host-land: #7a6a3c;
+    --border-strong: #5f8466;
     --clu: #3f72d6;
     --panel: #131d26;
     --panel-2: #1a2632;
