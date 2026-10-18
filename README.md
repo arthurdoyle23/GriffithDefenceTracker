@@ -37,11 +37,13 @@ Change a glyph or colour in `src/categories.js`, then run `npm run build:icons`.
 - The basemap is [OpenFreeMap](https://openfreemap.org) "Liberty", a free OpenStreetMap style with state borders and place names. It needs no account or key.
   If it can't be reached, the map falls back to the bundled Natural Earth countries in `public/data/world.geojson`.
 - Zoom stops at level 8, about state or province level. Clusters show a pie chart of engagement families.
-  Clicking a cluster lists its events in the sidebar.
+  Clicking a cluster lists its events in the side panel.
 
 ## Code layout
 
-- `src/App.jsx`: sidebar, filters, stats and the year slider
-- `src/components/MapView.jsx`: map, pie-chart clusters, markers and pop-ups
-- `src/popup.js`: the event pop-up
+- `src/App.jsx`: filter state
+- `src/components/MapView.jsx`: map, pie-chart clusters and markers
+- `src/components/Panel.jsx`: search, the legend that doubles as a filter, partner chips and the event list
+- `src/components/EventCard.jsx`: the detail card for a selected event
+- `src/components/YearStrip.jsx`: per-year counts, year filter and play-through
 - `src/categories.js`: categories, colours, icon glyphs and spelling aliases
