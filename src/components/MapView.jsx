@@ -60,10 +60,10 @@ const baseStyle = () => ({
 
 // Place names are drawn as images ("lbl|country|Fiji") so they use the site's own fonts and need no font server.
 const LABEL_STYLE = {
-  country: { font: () => `600 11px ${css('--display')}`, color: '--ink-2', upper: true, spacing: 1.4 },
-  state: { font: () => `italic 400 11px ${css('--body')}`, color: '--ink-3' },
-  capital: { font: () => `600 11.5px ${css('--body')}`, color: '--ink', dot: 3.2 },
-  city: { font: () => `400 11px ${css('--body')}`, color: '--ink-2', dot: 2.4 },
+  country: { size: 14, font: (px) => `600 ${px}px ${css('--display')}`, color: '--ink-2', upper: true, spacing: 1.6 },
+  state: { size: 13, font: (px) => `italic 400 ${px}px ${css('--body')}`, color: '--ink-2' },
+  capital: { size: 13.5, font: (px) => `600 ${px}px ${css('--body')}`, color: '--ink', dot: 3.6 },
+  city: { size: 12.5, font: (px) => `400 ${px}px ${css('--body')}`, color: '--ink-2', dot: 2.8 },
 };
 
 function drawLabelImage(map, id) {
@@ -75,14 +75,14 @@ function drawLabelImage(map, id) {
   const halo = 3;
   const ctx = document.createElement('canvas').getContext('2d');
   const setFont = () => {
-    ctx.font = style.font();
+    ctx.font = style.font(style.size);
     if (style.spacing) ctx.letterSpacing = `${style.spacing}px`;
   };
   setFont();
   const textW = Math.ceil(ctx.measureText(text).width);
   const dotW = style.dot ? style.dot * 2 + 5 : 0;
   const w = textW + dotW + halo * 2;
-  const h = 16 + halo * 2;
+  const h = Math.ceil(style.size * 1.45) + halo * 2;
   ctx.canvas.width = w * scale;
   ctx.canvas.height = h * scale;
   ctx.scale(scale, scale);
@@ -129,7 +129,7 @@ function addLabelLayers(map) {
     layout: {
       ...layout,
       'icon-anchor': ['case', ['get', 'below'], 'top', 'center'],
-      'icon-offset': ['case', ['get', 'below'], ['literal', [0, 20]], ['literal', [0, 0]]],
+      'icon-offset': ['case', ['get', 'below'], ['literal', [0, 22]], ['literal', [0, 0]]],
     },
     filter: ['all', ['==', ['get', 'kind'], 'country'], shown],
   });
@@ -305,6 +305,7 @@ export default function MapView({ events, selected, onSelect, onStack }) {
         document.fonts?.load(`600 11px ${css('--display')}`).catch(() => {}),
         document.fonts?.load(`400 11px ${css('--body')}`).catch(() => {}),
         document.fonts?.load(`600 11px ${css('--body')}`).catch(() => {}),
+        document.fonts?.load(`italic 400 11px ${css('--body')}`).catch(() => {}),
       ]);
 
       map.addSource('events', {
