@@ -38,8 +38,7 @@ Change a glyph or colour in `src/categories.js`, then run `npm run build:icons`.
 - The basemap is self-hosted, so it needs no account or key: plain land and sea with country borders, state borders,
   and names for every country, the main states and the capitals and towns of the Pacific. The five host countries are shaded.
 - Names are drawn with the site's own fonts. Island nations' names hang just below their islands so the cluster bubbles don't cover them.
-- Zoom stops at level 9. Clicking a cluster of fewer than 25 events lists them in the side panel straight away;
-  bigger clusters zoom in until they split.
+- Zoom stops at level 9. Clicking a cluster lists its events in the side panel and zooms in to fit them, at every zoom level.
 
 ## Code layout
 

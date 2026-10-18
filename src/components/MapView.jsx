@@ -11,7 +11,6 @@ const MAP_CONFIG = {
   // Zoom stops at roughly district level; anything still stacked is listed in the panel.
   maxZoom: 9,
   // Clusters smaller than this open as a list straight away; bigger ones zoom to fit their events first.
-  listBelow: 25,
 };
 
 const canHover = window.matchMedia('(hover: hover)').matches;
@@ -178,6 +177,13 @@ function loadIcon(map, slug) {
   });
 }
 
+// Room left for the side panel (bottom sheet on phones) and year strip when the map zooms to fit events.
+function clearOfPanel() {
+  return window.innerWidth < 760
+    ? { top: 140, bottom: Math.round(window.innerHeight * 0.45), left: 40, right: 40 }
+    : { top: 80, bottom: 120, left: 420, right: 80 };
+}
+
 function hoverHTML(event) {
   const text = event.text.length > 90 ? `${event.text.slice(0, 88)}…` : event.text;
   return `<div class="hover-card">
@@ -217,20 +223,13 @@ export default function MapView({ events, selected, onSelect, onStack }) {
     async function openCluster(clusterId, coords, count) {
       const source = map.getSource('events');
       const leaves = await source.getClusterLeaves(clusterId, count, 0);
-      const ids = leaves.map((l) => l.properties.id);
-      if (count < MAP_CONFIG.listBelow || map.getZoom() >= MAP_CONFIG.maxZoom - 0.1) {
-        latest.current.onStack(ids);
-        return;
-      }
+      // Every click lists the cluster's events in the panel and zooms in to fit them, as far as the zoom limit allows.
+      latest.current.onStack(leaves.map((l) => l.properties.id));
       const bounds = new maplibregl.LngLatBounds();
       leaves.forEach((l) => bounds.extend(l.geometry.coordinates));
-      const sameSpot = bounds.getEast() - bounds.getWest() < 0.02 && bounds.getNorth() - bounds.getSouth() < 0.02;
-      const camera = sameSpot ? null : map.cameraForBounds(bounds, { padding: 80, maxZoom: MAP_CONFIG.maxZoom });
-      if (!camera || camera.zoom <= map.getZoom() + 0.25) {
-        latest.current.onStack(ids);
-        return;
-      }
-      map.easeTo({ ...camera, duration: 700 });
+      const camera = map.cameraForBounds(bounds, { padding: clearOfPanel(), maxZoom: MAP_CONFIG.maxZoom });
+      const zoom = Math.min(MAP_CONFIG.maxZoom, Math.max(camera?.zoom ?? 0, map.getZoom() + 1.5));
+      if (zoom > map.getZoom() + 0.05) map.easeTo({ center: camera?.center ?? coords, zoom, duration: 700 });
     }
 
     // Cluster bubbles are HTML, styled exactly as in the mock-up (.clu in App.css).
@@ -256,7 +255,6 @@ export default function MapView({ events, selected, onSelect, onStack }) {
           el.textContent = p.point_count_abbreviated;
           el.setAttribute('aria-label', `${p.point_count} events, open`);
           const coords = f.geometry.coordinates;
-          const listsNow = () => p.point_count < MAP_CONFIG.listBelow || map.getZoom() >= MAP_CONFIG.maxZoom - 0.1;
           el.addEventListener('click', (ev) => {
             ev.stopPropagation();
             hover.remove();
@@ -267,7 +265,7 @@ export default function MapView({ events, selected, onSelect, onStack }) {
               hover
                 .setLngLat(coords)
                 .setHTML(
-                  `<div class="hover-card"><div class="hover-card__title">${p.point_count} events here</div><div class="hover-card__meta">${listsNow() ? 'Click to list them' : 'Click to zoom in'}</div></div>`,
+                  `<div class="hover-card"><div class="hover-card__title">${p.point_count} events here</div><div class="hover-card__meta">Click to zoom in and list them</div></div>`,
                 )
                 .addTo(map),
             );
@@ -367,9 +365,8 @@ export default function MapView({ events, selected, onSelect, onStack }) {
   useEffect(() => {
     const map = mapRef.current;
     if (!selected || !map) return;
-    // Picking an event keeps the zoom as it is (so an open cluster list stays put); it only pans if the event is off screen.
-    if (!map.getBounds().contains([selected.lng, selected.lat])) {
-      map.easeTo({ center: [selected.lng, selected.lat], duration: 600 });
+    if (!map.getBounds().contains([selected.lng, selected.lat]) || map.getZoom() < 5) {
+      map.easeTo({ center: [selected.lng, selected.lat], zoom: Math.max(map.getZoom(), 6) });
     }
   }, [selected]);
 
