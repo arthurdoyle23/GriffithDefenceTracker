@@ -19,6 +19,9 @@ npm run lint      # code checks
 Every push to `main` builds the site and publishes it to GitHub Pages through `.github/workflows/deploy.yml`.
 This needs a one-time setting in the repository: Settings → Pages → Build and deployment → Source: **GitHub Actions**.
 
+It also builds on [Netlify](https://www.netlify.com): `netlify.toml` holds the settings (build `npm run build`, publish `dist`, Node 22),
+so importing the repository in Netlify needs no other configuration. Netlify then redeploys on every push to `main` too.
+
 ## Data
 
 - `public/data/events.geojson` holds one point per engagement, with the properties `Year`, `Delivering_Country`,
