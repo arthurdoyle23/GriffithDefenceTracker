@@ -25,6 +25,8 @@ const baseStyle = () => ({
     world: { type: 'geojson', data: `${BASE}data/world.geojson`, attribution: 'Natural Earth' },
     states: { type: 'geojson', data: `${BASE}data/states.geojson` },
     labels: { type: 'geojson', data: `${BASE}data/labels.geojson` },
+    // Country names get their own copy so each can be nudged clear of the cluster bubbles (see placeCountryLabels).
+    'country-labels': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
   },
   layers: [
     { id: 'sea', type: 'background', paint: { 'background-color': css('--sea') } },
@@ -68,6 +70,8 @@ const LABEL_STYLE = {
   city: { size: 12.5, font: (px) => `400 ${px}px ${css('--body')}`, color: '--ink-2', dot: 2.8 },
 };
 
+const labelSizes = new Map();
+
 function drawLabelImage(map, id) {
   const [, kind, ...rest] = id.split('|');
   const style = LABEL_STYLE[kind];
@@ -108,6 +112,7 @@ function drawLabelImage(map, id) {
     ctx.stroke();
   }
   map.addImage(id, ctx.getImageData(0, 0, w * scale, h * scale), { pixelRatio: scale });
+  labelSizes.set(id, [w, h]);
 }
 
 function drawLandTexture(map) {
@@ -141,22 +146,17 @@ function addLabelLayers(map) {
     layout: { ...layout, 'icon-anchor': 'left', 'icon-offset': [-6, 0] },
     filter: ['all', ['in', ['get', 'kind'], ['literal', ['city', 'capital']]], shown],
   });
-  // Island nations sit under their event bubbles, so their names hang just below the islands.
   map.addLayer({
     id: 'labels-countries',
     type: 'symbol',
-    source: 'labels',
-    layout: {
-      ...layout,
-      'icon-anchor': ['case', ['get', 'below'], 'top', 'center'],
-      'icon-offset': ['case', ['get', 'below'], ['literal', [0, 22]], ['literal', [0, 0]]],
-    },
-    filter: ['all', ['==', ['get', 'kind'], 'country'], shown],
+    source: 'country-labels',
+    layout: { ...layout, 'icon-offset': ['get', 'offset'] },
+    filter: shown,
   });
 }
 
 // An invisible footprint under each cluster bubble, so a town or state name is hidden rather than half covered.
-// It sits below the country names, which always keep their place.
+// Country names are placed before it, so they always keep their place.
 function addClusterFootprints(map) {
   const size = 64;
   map.addImage('clu-footprint', { width: size, height: size, data: new Uint8Array(size * size * 4) });
@@ -368,6 +368,48 @@ export default function MapView({ events, selected, onSelect, onStack }) {
         });
       }
       map.on('render', drawClusters);
+
+      // Country names sit at the middle of their country. One that a cluster bubble would hide moves just below it.
+      let countryLabels = [];
+      fetch(`${BASE}data/labels.geojson`)
+        .then((res) => res.json())
+        .then((fc) => {
+          countryLabels = fc.features
+            .filter((f) => f.properties.kind === 'country')
+            .map((f) => ({ ...f, properties: { ...f.properties, offset: [0, 0] } }));
+          map.getSource('country-labels').setData({ type: 'FeatureCollection', features: countryLabels });
+        })
+        .catch(() => {});
+      const placeCountryLabels = () => {
+        if (!countryLabels.length) return;
+        const centre = map.getCenter().lng;
+        const near = ([lng, lat]) => map.project([lng + 360 * Math.round((centre - lng) / 360), lat]);
+        const bubbles = Object.values(onScreen).map((m) => {
+          const ll = m.getLngLat();
+          return { ...near([ll.lng, ll.lat]), r: m.getElement().offsetWidth / 2 + 3 };
+        });
+        let changed = false;
+        for (const f of countryLabels) {
+          const size = labelSizes.get(`lbl|country|${f.properties.name}`);
+          let dy = 0;
+          if (size && map.getZoom() >= f.properties.minzoom) {
+            const [w, h] = size;
+            const p = near(f.geometry.coordinates);
+            for (const b of bubbles) {
+              const x = Math.max(p.x - w / 2, Math.min(b.x, p.x + w / 2));
+              const y = Math.max(p.y - h / 2, Math.min(b.y, p.y + h / 2));
+              if ((x - b.x) ** 2 + (y - b.y) ** 2 < b.r ** 2) dy = Math.max(dy, b.y + b.r + 2 - (p.y - h / 2));
+            }
+          }
+          dy = Math.round(dy);
+          if (f.properties.offset[1] !== dy) {
+            f.properties.offset = [0, dy];
+            changed = true;
+          }
+        }
+        if (changed) map.getSource('country-labels').setData({ type: 'FeatureCollection', features: countryLabels });
+      };
+      map.on('idle', placeCountryLabels);
       map.on('sourcedata', (e) => {
         if (e.sourceId === 'events' && e.isSourceLoaded && e.sourceDataType !== 'metadata') resetClusters();
       });

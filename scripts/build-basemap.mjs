@@ -19,7 +19,7 @@ async function load(name) {
 // Countries we show in more detail: the five hosts and their neighbours.
 const DETAIL = new Set(['PNG', 'SLB', 'VUT', 'FJI', 'TON', 'AUS', 'NZL', 'NCL', 'IDN', 'TLS', 'WSM', 'KIR', 'TUV', 'NRU', 'FSM', 'MHL', 'PLW']);
 const HOSTS = new Set(['PNG', 'SLB', 'VUT', 'FJI', 'TON']);
-// Island nations whose names hang below the islands, clear of the event bubbles on top of them.
+// Island nations: named from the opening view, at the middle of their islands.
 const ISLANDS = new Set(['SLB', 'VUT', 'FJI', 'TON', 'WSM', 'KIR', 'TUV', 'NRU', 'FSM', 'MHL', 'PLW', 'NCL']);
 
 const round = (v) => Math.round(v * 100) / 100;
@@ -72,33 +72,40 @@ const stateLines = [
 // ---------- Labels ----------
 // minzoom says when a label may appear; rank orders them when they compete for space (lower wins).
 const labels = [];
-// The southern edge of an island nation's main islands (ignoring rocks), so its name can hang below them.
-const southEdge = (a3) => {
+// Island nations are named at the middle of their main islands (ignoring rocks), which suits a chain of islands
+// better than Natural Earth's label point.
+const islandMiddle = (a3) => {
   const f = countries10.features.find((c) => code(c.properties) === a3);
-  const lats = polys(f.geometry)
-    .map((p) => p[0])
+  const pts = polys(f.geometry)
+    .map((p) => fixRing(p[0]))
     .filter((ring) => {
       const xs = ring.map((c) => c[0]);
       const ys = ring.map((c) => c[1]);
       return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys)) > 0.02;
     })
-    .flatMap((ring) => ring.map((c) => c[1]));
-  return lats.length ? Math.min(...lats) : null;
+    .flat();
+  if (!pts.length) return null;
+  // Countries either side of the antimeridian (Fiji, Kiribati) are measured on 0–360° longitudes.
+  const wraps = pts.some((c) => c[0] > 150) && pts.some((c) => c[0] < -150);
+  const xs = pts.map((c) => (wraps && c[0] < 0 ? c[0] + 360 : c[0]));
+  const ys = pts.map((c) => c[1]);
+  const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+  return [x > 180 ? x - 360 : x, (Math.min(...ys) + Math.max(...ys)) / 2];
 };
 for (const f of countries50.features) {
   const p = f.properties;
   if (p.LABEL_X == null) continue;
   const host = HOSTS.has(code(p));
-  const below = ISLANDS.has(code(p));
+  // Kiribati spreads across three far-apart groups, so it keeps Natural Earth's label point.
+  const middle = ISLANDS.has(code(p)) && code(p) !== 'KIR' ? islandMiddle(code(p)) : null;
   labels.push({
     kind: 'country',
     name: p.NAME,
-    lng: p.LABEL_X,
-    lat: below ? Math.min(p.LABEL_Y, southEdge(code(p)) ?? p.LABEL_Y) : p.LABEL_Y,
+    lng: middle ? middle[0] : p.LABEL_X,
+    lat: middle ? middle[1] : p.LABEL_Y,
     // Every Pacific nation is named from the opening view.
     minzoom: host || ISLANDS.has(code(p)) ? 1 : Math.max(1, (p.MIN_LABEL ?? 3) - 1.5),
     rank: host ? 0 : ISLANDS.has(code(p)) ? 1 : p.LABELRANK ?? 5,
-    below,
   });
 }
 const countryNames = new Set(labels.map((l) => l.name));
