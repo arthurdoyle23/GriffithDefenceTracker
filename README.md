@@ -34,9 +34,9 @@ Change a glyph or colour in `src/categories.js`, then run `npm run build:icons`.
 
 ## Map
 
-- The basemap is [OpenFreeMap](https://openfreemap.org) "Liberty", a free OpenStreetMap style with state borders and place names. It needs no account or key.
-  If it can't be reached, the map falls back to the bundled Natural Earth countries in `public/data/world.geojson`.
-- Zoom stops at level 8, about state or province level. Clusters show a pie chart of engagement families.
+- The basemap is [CARTO](https://carto.com/basemaps) Voyager (Dark Matter in dark mode): neutral colours with country, state and city names.
+  CARTO basemaps are free for non-commercial use up to 75,000 map views a month, with attribution. If it can't be reached, the map falls back to the bundled Natural Earth countries in `public/data/world.geojson`.
+- Zoom stops at level 8, about state or province level. Place names are drawn above the markers so they stay readable.
   Clicking a cluster lists its events in the side panel.
 
 ## Code layout

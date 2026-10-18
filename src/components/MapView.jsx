@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
-import { CATEGORIES, FAMILIES } from '../categories';
+import { CATEGORIES } from '../categories';
 
 const BASE = import.meta.env.BASE_URL;
+const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 const MAP_CONFIG = {
   center: [160, -12],
@@ -10,11 +11,12 @@ const MAP_CONFIG = {
   minZoom: 1.5,
   // Zoom stops at roughly state/province level; anything still stacked is listed in the panel.
   maxZoom: 8,
-  // OpenFreeMap: free OpenStreetMap vector tiles with state borders and place names, no account or key.
-  styleUrl: 'https://tiles.openfreemap.org/styles/liberty',
+  // CARTO basemaps: soft, neutral colours with country, state and city names. Free with attribution.
+  styleUrl: prefersDark
+    ? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+    : 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
 };
 
-const FAMILY_IDS = Object.keys(FAMILIES);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 // Used only if the online basemap can't be reached: plain countries from the bundled Natural Earth file.
@@ -44,7 +46,7 @@ function toGeoJSON(events, selectedId) {
     type: 'FeatureCollection',
     features: events.map((e) => ({
       type: 'Feature',
-      properties: { id: e.id, icon: e.icon, family: e.family, selected: e.id === selectedId },
+      properties: { id: e.id, icon: e.icon, selected: e.id === selectedId },
       geometry: { type: 'Point', coordinates: [e.lng, e.lat] },
     })),
   };
@@ -63,40 +65,34 @@ function loadIcon(map, slug) {
   });
 }
 
-// A donut chart of the engagement families in a cluster, with the total in the middle.
-function pieMarker(props) {
-  const counts = FAMILY_IDS.map((id) => props[id] ?? 0);
-  const total = counts.reduce((a, b) => a + b, 0) || 1;
-  const r = Math.round(18 + Math.min(14, Math.sqrt(total) * 1.5));
-  const r0 = Math.round(r * 0.6);
-  const w = r * 2;
-
-  let svg = `<svg width="${w}" height="${w}" viewBox="0 0 ${w} ${w}" text-anchor="middle" aria-hidden="true">`;
-  let start = 0;
-  counts.forEach((n, i) => {
-    if (!n) return;
-    const end = start + n / total;
-    svg += segment(start, end, r, r0, `var(--f-${FAMILY_IDS[i]})`);
-    start = end;
-  });
-  svg += `<circle cx="${r}" cy="${r}" r="${r0}" fill="var(--panel)"/>`;
-  svg += `<text x="${r}" y="${r}" dominant-baseline="central" font-size="${total >= 100 ? 11 : 12}" font-weight="600" fill="var(--ink)" font-family="var(--mono)">${props.point_count_abbreviated}</text>`;
-  svg += '</svg>';
-
-  const el = document.createElement('button');
-  el.className = 'cluster';
-  el.innerHTML = svg;
-  el.setAttribute('aria-label', `${props.point_count} events here, show list`);
-  return el;
-}
-
-function segment(start, end, r, r0, color) {
-  if (end - start >= 1) end -= 0.00001;
-  const a0 = 2 * Math.PI * (start - 0.25);
-  const a1 = 2 * Math.PI * (end - 0.25);
-  const [x0, y0, x1, y1] = [Math.cos(a0), Math.sin(a0), Math.cos(a1), Math.sin(a1)];
-  const large = end - start > 0.5 ? 1 : 0;
-  return `<path d="M ${r + r0 * x0} ${r + r0 * y0} L ${r + r * x0} ${r + r * y0} A ${r} ${r} 0 ${large} 1 ${r + r * x1} ${r + r * y1} L ${r + r0 * x1} ${r + r0 * y1} A ${r0} ${r0} 0 ${large} 0 ${r + r0 * x0} ${r + r0 * y0}" fill="${color}"/>`;
+// Cluster bubbles are drawn on demand as images ("cluster-42"), so they live inside the map canvas.
+// That lets the basemap's place names sit on top of them, and needs no font server for the counts.
+function drawClusterImage(map, id) {
+  const count = parseInt(id.slice('cluster-'.length), 10);
+  if (!Number.isFinite(count)) return;
+  const scale = 2;
+  const r = Math.round(14 + Math.min(15, Math.sqrt(count) * 1.4));
+  const ring = 4;
+  const size = (r + ring) * 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  const c = size / 2;
+  ctx.beginPath();
+  ctx.arc(c, c, r + ring, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(23, 33, 43, 0.22)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(c, c, r, 0, Math.PI * 2);
+  ctx.fillStyle = css('--ink');
+  ctx.fill();
+  ctx.fillStyle = css('--panel');
+  ctx.font = `600 ${count >= 100 ? 11 : 12}px ${css('--mono')}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count), c, c + 0.5);
+  map.addImage(id, ctx.getImageData(0, 0, size * scale, size * scale), { pixelRatio: scale });
 }
 
 const FALLBACK_LABELS = [
@@ -120,38 +116,6 @@ export default function MapView({ events, selected, onSelect, onStack }) {
   useEffect(() => {
     let map;
     let cancelled = false;
-    let markers = {};
-    let onScreen = {};
-
-    const resetClusters = () => {
-      Object.values(onScreen).forEach((m) => m.remove());
-      markers = {};
-      onScreen = {};
-    };
-
-    // Cluster pies are HTML markers; re-drawn as the map moves.
-    const drawClusters = () => {
-      if (!map.getSource('events') || !map.isSourceLoaded('events')) return;
-      const next = {};
-      for (const f of map.querySourceFeatures('events')) {
-        const p = f.properties;
-        if (!p.cluster || next[p.cluster_id]) continue;
-        let marker = markers[p.cluster_id];
-        if (!marker) {
-          const el = pieMarker(p);
-          const coords = f.geometry.coordinates;
-          el.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            openCluster(p.cluster_id, coords, p.point_count);
-          });
-          marker = markers[p.cluster_id] = new maplibregl.Marker({ element: el }).setLngLat(coords);
-        }
-        next[p.cluster_id] = marker;
-        if (!onScreen[p.cluster_id]) marker.addTo(map);
-      }
-      for (const id in onScreen) if (!next[id]) onScreen[id].remove();
-      onScreen = next;
-    };
 
     // Replaces the spiderifier: a click lists the cluster's events in the panel,
     // and moves in a little if the cluster can still split apart.
@@ -177,9 +141,15 @@ export default function MapView({ events, selected, onSelect, onStack }) {
       });
       mapRef.current = map;
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+      map.on('styleimagemissing', (e) => {
+        if (e.id.startsWith('cluster-')) drawClusterImage(map, e.id);
+      });
 
       map.on('load', async () => {
         await Promise.all([...CATEGORIES.map((c) => loadIcon(map, c.slug)), loadIcon(map, 'default')]);
+
+        // Event layers go underneath the basemap's labels so place names always stay readable.
+        const firstLabel = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
 
         map.addSource('events', {
           type: 'geojson',
@@ -188,30 +158,33 @@ export default function MapView({ events, selected, onSelect, onStack }) {
           clusterRadius: 45,
           // Cluster all the way to the zoom limit so stacked events stay grouped.
           clusterMaxZoom: MAP_CONFIG.maxZoom,
-          clusterProperties: Object.fromEntries(
-            FAMILY_IDS.map((id) => [id, ['+', ['case', ['==', ['get', 'family'], id], 1, 0]]]),
-          ),
         });
-        // Invisible layer so clusters can be queried; the pies themselves are HTML markers.
-        map.addLayer({
-          id: 'clusters',
-          type: 'circle',
-          source: 'events',
-          filter: ['has', 'point_count'],
-          paint: { 'circle-radius': 0, 'circle-opacity': 0 },
-        });
-        map.addLayer({
-          id: 'points',
-          type: 'symbol',
-          source: 'events',
-          filter: ['!', ['has', 'point_count']],
-          layout: {
-            'icon-image': ['coalesce', ['image', ['get', 'icon']], ['image', 'default']],
-            'icon-size': ['case', ['get', 'selected'], 0.95, 0.68],
-            'icon-allow-overlap': true,
-            'symbol-sort-key': ['case', ['get', 'selected'], 1, 0],
+        const shared = { 'icon-allow-overlap': true, 'icon-ignore-placement': true };
+        map.addLayer(
+          {
+            id: 'points',
+            type: 'symbol',
+            source: 'events',
+            filter: ['!', ['has', 'point_count']],
+            layout: {
+              ...shared,
+              'icon-image': ['coalesce', ['image', ['get', 'icon']], ['image', 'default']],
+              'icon-size': ['case', ['get', 'selected'], 0.95, 0.68],
+              'symbol-sort-key': ['case', ['get', 'selected'], 1, 0],
+            },
           },
-        });
+          firstLabel,
+        );
+        map.addLayer(
+          {
+            id: 'clusters',
+            type: 'symbol',
+            source: 'events',
+            filter: ['has', 'point_count'],
+            layout: { ...shared, 'icon-image': ['concat', 'cluster-', ['to-string', ['get', 'point_count']]] },
+          },
+          firstLabel,
+        );
 
         if (!online) {
           FALLBACK_LABELS.forEach(([name, lng, lat, host]) => {
@@ -223,12 +196,14 @@ export default function MapView({ events, selected, onSelect, onStack }) {
         }
 
         map.on('click', 'points', (e) => latest.current.onSelect(e.features[0].properties.id));
-        map.on('mouseenter', 'points', () => (map.getCanvas().style.cursor = 'pointer'));
-        map.on('mouseleave', 'points', () => (map.getCanvas().style.cursor = ''));
-        map.on('render', drawClusters);
-        map.on('sourcedata', (e) => {
-          if (e.sourceId === 'events' && e.isSourceLoaded && e.sourceDataType !== 'metadata') resetClusters();
+        map.on('click', 'clusters', (e) => {
+          const p = e.features[0].properties;
+          openCluster(p.cluster_id, e.features[0].geometry.coordinates, p.point_count);
         });
+        for (const layer of ['points', 'clusters']) {
+          map.on('mouseenter', layer, () => (map.getCanvas().style.cursor = 'pointer'));
+          map.on('mouseleave', layer, () => (map.getCanvas().style.cursor = ''));
+        }
       });
     });
 

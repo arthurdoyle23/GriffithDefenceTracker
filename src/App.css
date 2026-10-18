@@ -199,13 +199,6 @@ h1 { margin: 4px 0 0; font: 750 24px/1.05 var(--display); font-stretch: 82%; let
 .year[aria-pressed='true'] .year__label { color: var(--ink); font-weight: 600; }
 
 /* ---------- Map overlays ---------- */
-.cluster {
-  padding: 0; border: 0; background: none; border-radius: 50%;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.28));
-  transition: transform 0.15s ease;
-}
-.cluster svg { display: block; }
-.cluster:hover { transform: scale(1.08); }
 .map-label {
   font: 600 11px/1 var(--display); font-stretch: 85%; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--ink-3); white-space: nowrap; pointer-events: none;
