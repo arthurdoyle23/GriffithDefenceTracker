@@ -246,9 +246,15 @@ export default function MapView({ events, selected, onSelect, onStack }) {
     const drawClusters = () => {
       if (!map.getSource('events') || !map.isSourceLoaded('events')) return;
       const next = {};
+      // Near the antimeridian (Fiji) the same cluster can come back twice under different ids; draw it once.
+      const seen = new Set();
       for (const f of map.querySourceFeatures('events')) {
         const p = f.properties;
         if (!p.cluster || next[p.cluster_id]) continue;
+        const [lng, lat] = f.geometry.coordinates;
+        const spot = `${p.point_count}|${(((lng % 360) + 540) % 360).toFixed(3)}|${lat.toFixed(3)}`;
+        if (seen.has(spot)) continue;
+        seen.add(spot);
         let marker = markers[p.cluster_id];
         if (!marker) {
           const el = document.createElement('button');

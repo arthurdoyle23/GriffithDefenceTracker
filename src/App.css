@@ -207,7 +207,7 @@ h1 { margin: 4px 0 0; font: 750 24px/1.05 var(--display); font-stretch: 82%; let
 
 /* ---------- Map overlays ---------- */
 /* Cluster bubbles: the first mock-up's rule (the default button bevel is part of the look), in navy instead of near-black. */
-.clu { display: grid; place-items: center; border-radius: 50%; color: #fff; font: 600 12px/1 var(--mono); background: var(--clu); box-shadow: 0 0 0 3px color-mix(in srgb, var(--clu) 25%, transparent); cursor: pointer; font-variant-numeric: tabular-nums; }
+.clu { display: grid; place-items: center; border-radius: 50%; color: #fff; font: 600 12px/1 var(--mono); background: color-mix(in srgb, var(--clu) 80%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--clu) 25%, transparent); cursor: pointer; font-variant-numeric: tabular-nums; }
 .maplibregl-ctrl-bottom-right { bottom: 0; right: env(safe-area-inset-right, 0px); }
 .maplibregl-ctrl-group { background: var(--panel); box-shadow: var(--shadow) !important; border-radius: 10px; }
 .maplibregl-ctrl-group button + button { border-top-color: var(--rule); }
