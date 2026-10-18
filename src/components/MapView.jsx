@@ -10,7 +10,8 @@ const MAP_CONFIG = {
   minZoom: 1.5,
   // Zoom stops at roughly district level; anything still stacked is listed in the panel.
   maxZoom: 9,
-  // Clusters smaller than this open as a list straight away; bigger ones zoom to fit their events first.
+  // Cluster clicks zoom in only when the map is zoomed out further than this.
+  zoomOnClickBelow: 5,
 };
 
 const canHover = window.matchMedia('(hover: hover)').matches;
@@ -223,8 +224,10 @@ export default function MapView({ events, selected, onSelect, onStack }) {
     async function openCluster(clusterId, coords, count) {
       const source = map.getSource('events');
       const leaves = await source.getClusterLeaves(clusterId, count, 0);
-      // Every click lists the cluster's events in the panel and zooms in to fit them, as far as the zoom limit allows.
+      // Every click lists the cluster's events in the panel. Only from the zoomed-out overview does it also zoom in;
+      // closer in, the list just opens and scroll-zoom is there if needed.
       latest.current.onStack(leaves.map((l) => l.properties.id));
+      if (map.getZoom() >= MAP_CONFIG.zoomOnClickBelow) return;
       const bounds = new maplibregl.LngLatBounds();
       leaves.forEach((l) => bounds.extend(l.geometry.coordinates));
       const camera = map.cameraForBounds(bounds, { padding: clearOfPanel(), maxZoom: MAP_CONFIG.maxZoom });
@@ -265,7 +268,7 @@ export default function MapView({ events, selected, onSelect, onStack }) {
               hover
                 .setLngLat(coords)
                 .setHTML(
-                  `<div class="hover-card"><div class="hover-card__title">${p.point_count} events here</div><div class="hover-card__meta">Click to zoom in and list them</div></div>`,
+                  `<div class="hover-card"><div class="hover-card__title">${p.point_count} events here</div><div class="hover-card__meta">${map.getZoom() < MAP_CONFIG.zoomOnClickBelow ? 'Click to zoom in and list them' : 'Click to list them'}</div></div>`,
                 )
                 .addTo(map),
             );
