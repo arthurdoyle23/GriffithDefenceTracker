@@ -36,7 +36,7 @@ const baseStyle = () => ({
       source: 'world',
       paint: { 'fill-color': ['case', ['get', 'host'], css('--host-land'), css('--land')] },
     },
-    // A faint cross-hatch over the land, drawn by drawLandTexture.
+    // Faint checked boxes over the land, drawn by drawLandTexture.
     { id: 'land-texture', type: 'fill', source: 'world', paint: { 'fill-pattern': 'land-texture' } },
     {
       id: 'states',
@@ -115,22 +115,17 @@ function drawLabelImage(map, id) {
   labelSizes.set(id, [w, h]);
 }
 
+// Faint see-through boxes in a checkerboard over the land.
 function drawLandTexture(map) {
-  const size = 10;
+  const box = 8;
   const scale = 2;
   const ctx = document.createElement('canvas').getContext('2d');
-  ctx.canvas.width = ctx.canvas.height = size * scale;
+  ctx.canvas.width = ctx.canvas.height = box * 2 * scale;
   ctx.scale(scale, scale);
-  ctx.strokeStyle = css('--land-texture');
-  ctx.lineWidth = 0.6;
-  ctx.beginPath();
-  // Two diagonals that tile seamlessly.
-  ctx.moveTo(0, size);
-  ctx.lineTo(size, 0);
-  ctx.moveTo(0, 0);
-  ctx.lineTo(size, size);
-  ctx.stroke();
-  map.addImage('land-texture', ctx.getImageData(0, 0, size * scale, size * scale), { pixelRatio: scale });
+  ctx.fillStyle = css('--land-texture');
+  ctx.fillRect(0, 0, box, box);
+  ctx.fillRect(box, box, box, box);
+  map.addImage('land-texture', ctx.getImageData(0, 0, box * 2 * scale, box * 2 * scale), { pixelRatio: scale });
 }
 
 function addLabelLayers(map) {
