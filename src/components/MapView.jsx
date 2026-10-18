@@ -36,8 +36,6 @@ const baseStyle = () => ({
       source: 'world',
       paint: { 'fill-color': ['case', ['get', 'host'], css('--host-land'), css('--land')] },
     },
-    // Faint checked boxes over the land, drawn by drawLandTexture.
-    { id: 'land-texture', type: 'fill', source: 'world', paint: { 'fill-pattern': 'land-texture' } },
     {
       id: 'states',
       type: 'line',
@@ -113,19 +111,6 @@ function drawLabelImage(map, id) {
   }
   map.addImage(id, ctx.getImageData(0, 0, w * scale, h * scale), { pixelRatio: scale });
   labelSizes.set(id, [w, h]);
-}
-
-// Faint see-through boxes in a checkerboard over the land.
-function drawLandTexture(map) {
-  const box = 8;
-  const scale = 2;
-  const ctx = document.createElement('canvas').getContext('2d');
-  ctx.canvas.width = ctx.canvas.height = box * 2 * scale;
-  ctx.scale(scale, scale);
-  ctx.fillStyle = css('--land-texture');
-  ctx.fillRect(0, 0, box, box);
-  ctx.fillRect(box, box, box, box);
-  map.addImage('land-texture', ctx.getImageData(0, 0, box * 2 * scale, box * 2 * scale), { pixelRatio: scale });
 }
 
 function addLabelLayers(map) {
@@ -229,7 +214,6 @@ export default function MapView({ events, selected, onSelect, onStack }) {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.on('styleimagemissing', (e) => {
       if (e.id.startsWith('lbl|')) drawLabelImage(map, e.id);
-      else if (e.id === 'land-texture') drawLandTexture(map);
     });
 
     const hover = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 16, className: 'hover-popup', maxWidth: '280px' });
@@ -309,7 +293,7 @@ export default function MapView({ events, selected, onSelect, onStack }) {
       map.setPaintProperty('borders', 'line-color', css('--border-strong'));
       map
         .listImages()
-        .filter((id) => id.startsWith('lbl|') || id === 'land-texture')
+        .filter((id) => id.startsWith('lbl|'))
         .forEach((id) => map.removeImage(id));
       map.triggerRepaint();
     };
