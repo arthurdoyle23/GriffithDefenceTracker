@@ -3,6 +3,8 @@
   --sea: #b9d6ea;
   --land: #f6f4ef;
   --border: #c9cfd3;
+  --host-land: #ece6d8;
+  --border-strong: #a9a397;
   --panel: #ffffff;
   --panel-2: #f3f5f6;
   --ink: #17212b;
@@ -30,6 +32,8 @@
     --sea: #132c42;
     --land: #1d2a35;
     --border: #31414e;
+    --host-land: #24333f;
+    --border-strong: #46586a;
     --panel: #131d26;
     --panel-2: #1a2632;
     --ink: #e8edf1;
@@ -199,12 +203,8 @@ h1 { margin: 4px 0 0; font: 750 24px/1.05 var(--display); font-stretch: 82%; let
 .year[aria-pressed='true'] .year__label { color: var(--ink); font-weight: 600; }
 
 /* ---------- Map overlays ---------- */
-.map-label {
-  font: 600 11px/1 var(--display); font-stretch: 85%; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--ink-3); white-space: nowrap; pointer-events: none;
-  text-shadow: 0 0 3px var(--halo), 0 0 3px var(--halo);
-}
-.map-label--host { color: var(--ink-2); }
+/* Cluster bubbles, copied rule for rule from the first mock-up (the default button bevel is part of the look). */
+.clu { display: grid; place-items: center; border-radius: 50%; color: var(--panel); font: 600 12px/1 var(--mono); background: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 22%, transparent); cursor: pointer; font-variant-numeric: tabular-nums; }
 .maplibregl-ctrl-bottom-right { bottom: 78px; right: env(safe-area-inset-right, 0px); }
 .maplibregl-ctrl-group { background: var(--panel); box-shadow: var(--shadow) !important; border-radius: 10px; }
 .maplibregl-ctrl-group button + button { border-top-color: var(--rule); }

@@ -25,7 +25,8 @@ This needs a one-time setting in the repository: Settings → Pages → Build an
   `Receiving_Countries` (semicolon-separated), `Diplomacy_category` (semicolon-separated), `Comments` and `Source`.
 - Category spellings are tidied when the data loads (for example "MIL - POL Engagement" becomes "MIL-POL Engagement").
   A row whose category isn't recognised is logged to the browser console. Add new names or aliases in `src/categories.js`.
-- `public/data/world.geojson` is the basemap, built from Natural Earth. Regenerate it with `npm run build:basemap`.
+- `public/data/world.geojson`, `states.geojson` and `labels.geojson` are the basemap (countries, state borders and place names),
+  built from [Natural Earth](https://www.naturalearthdata.com) (public domain). Regenerate them with `npm run build:basemap`.
 
 ## Icons
 
@@ -34,15 +35,16 @@ Change a glyph or colour in `src/categories.js`, then run `npm run build:icons`.
 
 ## Map
 
-- The basemap is [CARTO](https://carto.com/basemaps) Voyager (Dark Matter in dark mode): neutral colours with country, state and city names.
-  CARTO basemaps are free for non-commercial use up to 75,000 map views a month, with attribution. If it can't be reached, the map falls back to the bundled Natural Earth countries in `public/data/world.geojson`.
-- Zoom stops at level 8, about state or province level. Place names are drawn above the markers so they stay readable.
-  Clicking a cluster lists its events in the side panel.
+- The basemap is self-hosted, so it needs no account or key: plain land and sea with country borders, state borders,
+  and names for every country, the main states and the capitals and towns of the Pacific. The five host countries are shaded.
+- Names are drawn with the site's own fonts. Island nations' names hang just below their islands so the cluster bubbles don't cover them.
+- Zoom stops at level 9. Clicking a cluster of fewer than 25 events lists them in the side panel straight away;
+  bigger clusters zoom in until they split.
 
 ## Code layout
 
 - `src/App.jsx`: filter state
-- `src/components/MapView.jsx`: map, pie-chart clusters and markers
+- `src/components/MapView.jsx`: map, cluster bubbles, markers and hover pop-ups
 - `src/components/Panel.jsx`: search, the legend that doubles as a filter, partner chips and the event list
 - `src/components/EventCard.jsx`: the detail card for a selected event
 - `src/components/YearStrip.jsx`: per-year counts, year filter and play-through

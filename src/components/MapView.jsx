@@ -3,80 +3,155 @@ import maplibregl from 'maplibre-gl';
 import { CATEGORIES } from '../categories';
 
 const BASE = import.meta.env.BASE_URL;
-const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 const MAP_CONFIG = {
   center: [160, -12],
   zoom: window.innerWidth < 760 ? 2.4 : 3.5,
   minZoom: 1.5,
-  // Zoom stops at roughly state/province level; anything still stacked is listed in the panel.
-  maxZoom: 8,
-  // CARTO basemaps: soft, neutral colours with country, state and city names. Free with attribution.
-  styleUrl: prefersDark
-    ? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-    : 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+  // Zoom stops at roughly district level; anything still stacked is listed in the panel.
+  maxZoom: 9,
   // Clusters smaller than this open as a list straight away; bigger ones zoom to fit their events first.
   listBelow: 25,
-  // Open elevation tiles (Mapzen/AWS) used for a light shaded-relief texture, including the sea floor.
-  terrainTiles: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
 };
 
 const canHover = window.matchMedia('(hover: hover)').matches;
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-// Bluer water plus shaded relief, so the basemap has some texture without getting busy.
-function tuneStyle(style) {
-  const water = prefersDark ? '#173650' : '#a9d0ea';
-  const layers = style.layers.map((l) =>
-    l.type === 'fill' && /water|ocean|sea/i.test(l.id) && !/shadow|pattern/i.test(l.id)
-      ? { ...l, paint: { ...l.paint, 'fill-color': water } }
-      : l,
-  );
-  style.sources.terrain = {
-    type: 'raster-dem',
-    tiles: [MAP_CONFIG.terrainTiles],
-    encoding: 'terrarium',
-    tileSize: 256,
-    maxzoom: 12,
-    attribution: 'Terrain: Mapzen, AWS',
-  };
-  const hillshade = {
-    id: 'relief',
-    type: 'hillshade',
-    source: 'terrain',
-    paint: prefersDark
-      ? { 'hillshade-exaggeration': 0.35, 'hillshade-shadow-color': '#000000', 'hillshade-highlight-color': '#3b5f80', 'hillshade-accent-color': '#0b1a26' }
-      : { 'hillshade-exaggeration': 0.3, 'hillshade-shadow-color': '#4a6f8c', 'hillshade-highlight-color': '#ffffff', 'hillshade-accent-color': '#6d8ea8' },
-  };
-  // Above land and water, below roads, borders and labels.
-  const lastWater = layers.findLastIndex((l) => l.type === 'fill' && /water|ocean|sea/i.test(l.id));
-  const firstLine = layers.findIndex((l, i) => i > lastWater && (l.type === 'line' || l.type === 'symbol'));
-  layers.splice(firstLine === -1 ? layers.length : firstLine, 0, hillshade);
-  return { ...style, layers };
-}
-
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-// Used only if the online basemap can't be reached: plain countries from the bundled Natural Earth file.
-const fallbackStyle = () => ({
+// The basemap is self-hosted Natural Earth data (see scripts/build-basemap.mjs): no tile server, key or quota.
+const baseStyle = () => ({
   version: 8,
-  sources: { world: { type: 'geojson', data: `${BASE}data/world.geojson` } },
+  sources: {
+    world: { type: 'geojson', data: `${BASE}data/world.geojson`, attribution: 'Natural Earth' },
+    states: { type: 'geojson', data: `${BASE}data/states.geojson` },
+    labels: { type: 'geojson', data: `${BASE}data/labels.geojson` },
+  },
   layers: [
     { id: 'sea', type: 'background', paint: { 'background-color': css('--sea') } },
-    { id: 'land', type: 'fill', source: 'world', paint: { 'fill-color': css('--land') } },
-    { id: 'borders', type: 'line', source: 'world', paint: { 'line-color': css('--border'), 'line-width': 0.6 } },
+    {
+      id: 'land',
+      type: 'fill',
+      source: 'world',
+      paint: { 'fill-color': ['case', ['get', 'host'], css('--host-land'), css('--land')] },
+    },
+    {
+      id: 'states',
+      type: 'line',
+      source: 'states',
+      minzoom: 3,
+      paint: {
+        'line-color': css('--border'),
+        'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.4, 9, 1],
+        'line-dasharray': [3, 2],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.5, 6, 0.9],
+      },
+    },
+    {
+      id: 'borders',
+      type: 'line',
+      source: 'world',
+      paint: {
+        'line-color': css('--border-strong'),
+        'line-width': ['interpolate', ['linear'], ['zoom'], 1.5, 0.5, 9, 1.6],
+      },
+    },
   ],
 });
 
-async function loadStyle() {
-  try {
-    const res = await fetch(MAP_CONFIG.styleUrl, { signal: AbortSignal.timeout(6000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return { style: tuneStyle(await res.json()), online: true };
-  } catch (err) {
-    console.warn('Online basemap unavailable, using the built-in map instead.', err);
-    return { style: fallbackStyle(), online: false };
+// Place names are drawn as images ("lbl|country|Fiji") so they use the site's own fonts and need no font server.
+const LABEL_STYLE = {
+  country: { font: () => `600 11px ${css('--display')}`, color: '--ink-2', upper: true, spacing: 1.4 },
+  state: { font: () => `italic 400 11px ${css('--body')}`, color: '--ink-3' },
+  capital: { font: () => `600 11.5px ${css('--body')}`, color: '--ink', dot: 3.2 },
+  city: { font: () => `400 11px ${css('--body')}`, color: '--ink-2', dot: 2.4 },
+};
+
+function drawLabelImage(map, id) {
+  const [, kind, ...rest] = id.split('|');
+  const style = LABEL_STYLE[kind];
+  if (!style) return;
+  const text = style.upper ? rest.join('|').toUpperCase() : rest.join('|');
+  const scale = 2;
+  const halo = 3;
+  const ctx = document.createElement('canvas').getContext('2d');
+  const setFont = () => {
+    ctx.font = style.font();
+    if (style.spacing) ctx.letterSpacing = `${style.spacing}px`;
+  };
+  setFont();
+  const textW = Math.ceil(ctx.measureText(text).width);
+  const dotW = style.dot ? style.dot * 2 + 5 : 0;
+  const w = textW + dotW + halo * 2;
+  const h = 16 + halo * 2;
+  ctx.canvas.width = w * scale;
+  ctx.canvas.height = h * scale;
+  ctx.scale(scale, scale);
+  setFont();
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = css('--halo');
+  ctx.lineWidth = halo;
+  const x = halo + dotW;
+  const y = h / 2 + 0.5;
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = css(style.color);
+  ctx.fillText(text, x, y);
+  if (style.dot) {
+    ctx.beginPath();
+    ctx.arc(halo + style.dot, h / 2, style.dot, 0, Math.PI * 2);
+    ctx.fillStyle = css('--ink-2');
+    ctx.strokeStyle = css('--halo');
+    ctx.lineWidth = 1.5;
+    ctx.fill();
+    ctx.stroke();
   }
+  map.addImage(id, ctx.getImageData(0, 0, w * scale, h * scale), { pixelRatio: scale });
+}
+
+function addLabelLayers(map) {
+  const image = ['concat', 'lbl|', ['get', 'kind'], '|', ['get', 'name']];
+  const shown = ['>=', ['zoom'], ['get', 'minzoom']];
+  const layout = { 'icon-image': image, 'symbol-sort-key': ['get', 'rank'], 'icon-padding': 2 };
+  // Event markers never push a name off the map; names only compete with each other for space.
+  map.addLayer({ id: 'labels-states', type: 'symbol', source: 'labels', layout, filter: ['all', ['==', ['get', 'kind'], 'state'], shown] });
+  map.addLayer({
+    id: 'labels-cities',
+    type: 'symbol',
+    source: 'labels',
+    layout: { ...layout, 'icon-anchor': 'left', 'icon-offset': [-6, 0] },
+    filter: ['all', ['in', ['get', 'kind'], ['literal', ['city', 'capital']]], shown],
+  });
+  // Island nations sit under their event bubbles, so their names hang just below the islands.
+  map.addLayer({
+    id: 'labels-countries',
+    type: 'symbol',
+    source: 'labels',
+    layout: {
+      ...layout,
+      'icon-anchor': ['case', ['get', 'below'], 'top', 'center'],
+      'icon-offset': ['case', ['get', 'below'], ['literal', [0, 20]], ['literal', [0, 0]]],
+    },
+    filter: ['all', ['==', ['get', 'kind'], 'country'], shown],
+  });
+}
+
+// An invisible footprint under each cluster bubble, so a town or state name is hidden rather than half covered.
+// It sits below the country names, which always keep their place.
+function addClusterFootprints(map) {
+  const size = 64;
+  map.addImage('clu-footprint', { width: size, height: size, data: new Uint8Array(size * size * 4) });
+  map.addLayer({
+    id: 'cluster-footprints',
+    type: 'symbol',
+    source: 'events',
+    filter: ['has', 'point_count'],
+    layout: {
+      'icon-image': 'clu-footprint',
+      // Matches the bubble size in drawClusters, plus its ring.
+      'icon-size': ['/', ['+', 32, ['min', 30, ['*', ['sqrt', ['get', 'point_count']], 2.6]]], size],
+      'icon-allow-overlap': true,
+    },
+  }, 'labels-countries');
 }
 
 function toGeoJSON(events, selectedId) {
@@ -103,38 +178,6 @@ function loadIcon(map, slug) {
   });
 }
 
-// Cluster bubbles match the original mock-up: a dark disc with a soft ring and the count in the middle.
-// They are drawn on demand as images ("cluster-42") inside the map, so place names stay on top of them.
-function drawClusterImage(map, id) {
-  const count = parseInt(id.slice('cluster-'.length), 10);
-  if (!Number.isFinite(count)) return;
-  const scale = 2;
-  const ring = 3;
-  const d = Math.round(26 + Math.min(30, Math.sqrt(count) * 2.6));
-  const size = d + ring * 2;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size * scale;
-  const ctx = canvas.getContext('2d');
-  ctx.scale(scale, scale);
-  const c = size / 2;
-  const ink = css('--ink');
-  ctx.beginPath();
-  ctx.arc(c, c, d / 2 + ring, 0, Math.PI * 2);
-  ctx.fillStyle = ink;
-  ctx.globalAlpha = 0.22;
-  ctx.fill();
-  ctx.globalAlpha = 1;
-  ctx.beginPath();
-  ctx.arc(c, c, d / 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = css('--panel');
-  ctx.font = `600 12px ${css('--mono')}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(count >= 1000 ? `${Math.round(count / 1000)}k` : String(count), c, c + 0.5);
-  map.addImage(id, ctx.getImageData(0, 0, size * scale, size * scale), { pixelRatio: scale });
-}
-
 function hoverHTML(event) {
   const text = event.text.length > 90 ? `${event.text.slice(0, 88)}…` : event.text;
   return `<div class="hover-card">
@@ -144,18 +187,6 @@ function hoverHTML(event) {
   </div>`;
 }
 
-const FALLBACK_LABELS = [
-  ['Papua New Guinea', 145.2, -6.4, true],
-  ['Solomon Islands', 160.2, -9.9, true],
-  ['Vanuatu', 167.4, -15.6, true],
-  ['Fiji', 178.6, -17.2, true],
-  ['Tonga', -174.6, -21.6, true],
-  ['Australia', 134, -25],
-  ['New Zealand', 172.5, -41.5],
-  ['Indonesia', 118, -2],
-  ['New Caledonia', 165.6, -21.9],
-];
-
 export default function MapView({ events, selected, onSelect, onStack }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -163,8 +194,23 @@ export default function MapView({ events, selected, onSelect, onStack }) {
   latest.current = { events, selected, onSelect, onStack };
 
   useEffect(() => {
-    let map;
-    let cancelled = false;
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: baseStyle(),
+      center: MAP_CONFIG.center,
+      zoom: MAP_CONFIG.zoom,
+      minZoom: MAP_CONFIG.minZoom,
+      maxZoom: MAP_CONFIG.maxZoom,
+      attributionControl: { compact: true, customAttribution: 'Icons: Lucide' },
+    });
+    mapRef.current = map;
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+    map.on('styleimagemissing', (e) => {
+      if (e.id.startsWith('lbl|')) drawLabelImage(map, e.id);
+    });
+
+    const hover = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 16, className: 'hover-popup', maxWidth: '280px' });
+    map.on('movestart', () => hover.remove());
 
     // Replaces the spiderifier. Small clusters list their events in the panel at once;
     // big ones zoom to fit their events in one move, then list them if they still sit together.
@@ -187,111 +233,127 @@ export default function MapView({ events, selected, onSelect, onStack }) {
       map.easeTo({ ...camera, duration: 700 });
     }
 
-    loadStyle().then(({ style, online }) => {
-      if (cancelled) return;
-      map = new maplibregl.Map({
-        container: containerRef.current,
-        style,
-        center: MAP_CONFIG.center,
-        zoom: MAP_CONFIG.zoom,
-        minZoom: MAP_CONFIG.minZoom,
-        maxZoom: MAP_CONFIG.maxZoom,
-        attributionControl: { compact: true, customAttribution: 'Icons: Lucide' },
-      });
-      mapRef.current = map;
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-      map.on('styleimagemissing', (e) => {
-        if (e.id.startsWith('cluster-')) drawClusterImage(map, e.id);
-      });
-
-      map.on('load', async () => {
-        await Promise.all([
-          ...CATEGORIES.map((c) => loadIcon(map, c.slug)),
-          loadIcon(map, 'default'),
-          document.fonts?.load(`600 12px ${css('--mono')}`).catch(() => {}),
-        ]);
-
-        // Event layers go underneath the basemap's labels so place names always stay readable.
-        const firstLabel = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
-
-        map.addSource('events', {
-          type: 'geojson',
-          data: toGeoJSON(latest.current.events, latest.current.selected?.id),
-          cluster: true,
-          clusterRadius: 45,
-          // Cluster all the way to the zoom limit so stacked events stay grouped.
-          clusterMaxZoom: MAP_CONFIG.maxZoom,
-        });
-        const shared = { 'icon-allow-overlap': true, 'icon-ignore-placement': true };
-        map.addLayer(
-          {
-            id: 'points',
-            type: 'symbol',
-            source: 'events',
-            filter: ['!', ['has', 'point_count']],
-            layout: {
-              ...shared,
-              'icon-image': ['coalesce', ['image', ['get', 'icon']], ['image', 'default']],
-              'icon-size': ['case', ['get', 'selected'], 0.95, 0.68],
-              'symbol-sort-key': ['case', ['get', 'selected'], 1, 0],
-            },
-          },
-          firstLabel,
-        );
-        map.addLayer(
-          {
-            id: 'clusters',
-            type: 'symbol',
-            source: 'events',
-            filter: ['has', 'point_count'],
-            layout: { ...shared, 'icon-image': ['concat', 'cluster-', ['to-string', ['get', 'point_count']]] },
-          },
-          firstLabel,
-        );
-
-        if (!online) {
-          FALLBACK_LABELS.forEach(([name, lng, lat, host]) => {
-            const el = document.createElement('div');
-            el.className = host ? 'map-label map-label--host' : 'map-label';
-            el.textContent = name;
-            new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
-          });
-        }
-
-        map.on('click', 'points', (e) => latest.current.onSelect(e.features[0].properties.id));
-        map.on('click', 'clusters', (e) => {
-          const p = e.features[0].properties;
-          openCluster(p.cluster_id, e.features[0].geometry.coordinates, p.point_count);
-        });
-        const hover = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 16, className: 'hover-popup', maxWidth: '280px' });
-        for (const layer of ['points', 'clusters']) {
-          map.on('mouseenter', layer, () => (map.getCanvas().style.cursor = 'pointer'));
-          map.on('mouseleave', layer, () => {
-            map.getCanvas().style.cursor = '';
+    // Cluster bubbles are HTML, styled exactly as in the mock-up (.clu in App.css).
+    let markers = {};
+    let onScreen = {};
+    const resetClusters = () => {
+      Object.values(onScreen).forEach((m) => m.remove());
+      markers = {};
+      onScreen = {};
+    };
+    const drawClusters = () => {
+      if (!map.getSource('events') || !map.isSourceLoaded('events')) return;
+      const next = {};
+      for (const f of map.querySourceFeatures('events')) {
+        const p = f.properties;
+        if (!p.cluster || next[p.cluster_id]) continue;
+        let marker = markers[p.cluster_id];
+        if (!marker) {
+          const el = document.createElement('button');
+          el.className = 'clu';
+          const size = Math.round(26 + Math.min(30, Math.sqrt(p.point_count) * 2.6));
+          el.style.width = el.style.height = `${size}px`;
+          el.textContent = p.point_count_abbreviated;
+          el.setAttribute('aria-label', `${p.point_count} events, open`);
+          const coords = f.geometry.coordinates;
+          const listsNow = () => p.point_count < MAP_CONFIG.listBelow || map.getZoom() >= MAP_CONFIG.maxZoom - 0.1;
+          el.addEventListener('click', (ev) => {
+            ev.stopPropagation();
             hover.remove();
+            openCluster(p.cluster_id, coords, p.point_count);
           });
+          if (canHover) {
+            el.addEventListener('mouseenter', () =>
+              hover
+                .setLngLat(coords)
+                .setHTML(
+                  `<div class="hover-card"><div class="hover-card__title">${p.point_count} events here</div><div class="hover-card__meta">${listsNow() ? 'Click to list them' : 'Click to zoom in'}</div></div>`,
+                )
+                .addTo(map),
+            );
+            el.addEventListener('mouseleave', () => hover.remove());
+          }
+          marker = markers[p.cluster_id] = new maplibregl.Marker({ element: el }).setLngLat(coords);
         }
-        map.on('movestart', () => hover.remove());
-        if (canHover) {
-          map.on('mousemove', 'points', (e) => {
-            const event = latest.current.events.find((ev) => ev.id === e.features[0].properties.id);
-            if (event) hover.setLngLat([event.lng, event.lat]).setHTML(hoverHTML(event)).addTo(map);
-          });
-          map.on('mousemove', 'clusters', (e) => {
-            const n = e.features[0].properties.point_count;
-            const hint = n < MAP_CONFIG.listBelow || map.getZoom() >= MAP_CONFIG.maxZoom - 0.1 ? 'Click to list them' : 'Click to zoom in';
-            hover
-              .setLngLat(e.features[0].geometry.coordinates)
-              .setHTML(`<div class="hover-card"><div class="hover-card__title">${n} events here</div><div class="hover-card__meta">${hint}</div></div>`)
-              .addTo(map);
-          });
-        }
+        next[p.cluster_id] = marker;
+        if (!onScreen[p.cluster_id]) marker.addTo(map);
+      }
+      for (const id in onScreen) if (!next[id]) onScreen[id].remove();
+      onScreen = next;
+    };
+
+    // Re-colour the map and redraw the names when the device switches between light and dark.
+    const scheme = window.matchMedia('(prefers-color-scheme: dark)');
+    const repaint = () => {
+      if (!map.getLayer('land')) return;
+      map.setPaintProperty('sea', 'background-color', css('--sea'));
+      map.setPaintProperty('land', 'fill-color', ['case', ['get', 'host'], css('--host-land'), css('--land')]);
+      map.setPaintProperty('states', 'line-color', css('--border'));
+      map.setPaintProperty('borders', 'line-color', css('--border-strong'));
+      map
+        .listImages()
+        .filter((id) => id.startsWith('lbl|'))
+        .forEach((id) => map.removeImage(id));
+      map.triggerRepaint();
+    };
+    scheme.addEventListener('change', repaint);
+
+    map.on('load', async () => {
+      await Promise.all([
+        ...CATEGORIES.map((c) => loadIcon(map, c.slug)),
+        loadIcon(map, 'default'),
+        document.fonts?.load(`600 11px ${css('--display')}`).catch(() => {}),
+        document.fonts?.load(`400 11px ${css('--body')}`).catch(() => {}),
+        document.fonts?.load(`600 11px ${css('--body')}`).catch(() => {}),
+      ]);
+
+      map.addSource('events', {
+        type: 'geojson',
+        data: toGeoJSON(latest.current.events, latest.current.selected?.id),
+        cluster: true,
+        clusterRadius: 46,
+        // Cluster all the way to the zoom limit so stacked events stay grouped.
+        clusterMaxZoom: MAP_CONFIG.maxZoom,
+      });
+      map.addLayer({
+        id: 'points',
+        type: 'symbol',
+        source: 'events',
+        filter: ['!', ['has', 'point_count']],
+        layout: {
+          'icon-image': ['coalesce', ['image', ['get', 'icon']], ['image', 'default']],
+          'icon-size': ['case', ['get', 'selected'], 0.95, 0.68],
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+          'symbol-sort-key': ['case', ['get', 'selected'], 1, 0],
+        },
+      });
+      // Names go above the event markers so they are always readable.
+      addLabelLayers(map);
+      addClusterFootprints(map);
+
+      map.on('click', 'points', (e) => latest.current.onSelect(e.features[0].properties.id));
+      map.on('mouseenter', 'points', () => (map.getCanvas().style.cursor = 'pointer'));
+      map.on('mouseleave', 'points', () => {
+        map.getCanvas().style.cursor = '';
+        hover.remove();
+      });
+      if (canHover) {
+        map.on('mousemove', 'points', (e) => {
+          const event = latest.current.events.find((ev) => ev.id === e.features[0].properties.id);
+          if (event) hover.setLngLat([event.lng, event.lat]).setHTML(hoverHTML(event)).addTo(map);
+        });
+      }
+      map.on('render', drawClusters);
+      map.on('sourcedata', (e) => {
+        if (e.sourceId === 'events' && e.isSourceLoaded && e.sourceDataType !== 'metadata') resetClusters();
       });
     });
 
     return () => {
-      cancelled = true;
-      map?.remove();
+      scheme.removeEventListener('change', repaint);
+      hover.remove();
+      map.remove();
       mapRef.current = null;
     };
   }, []);
