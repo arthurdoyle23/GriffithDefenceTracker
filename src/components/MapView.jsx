@@ -367,8 +367,9 @@ export default function MapView({ events, selected, onSelect, onStack }) {
   useEffect(() => {
     const map = mapRef.current;
     if (!selected || !map) return;
-    if (!map.getBounds().contains([selected.lng, selected.lat]) || map.getZoom() < 5) {
-      map.easeTo({ center: [selected.lng, selected.lat], zoom: Math.max(map.getZoom(), 6) });
+    // Picking an event keeps the zoom as it is (so an open cluster list stays put); it only pans if the event is off screen.
+    if (!map.getBounds().contains([selected.lng, selected.lat])) {
+      map.easeTo({ center: [selected.lng, selected.lat], duration: 600 });
     }
   }, [selected]);
 
