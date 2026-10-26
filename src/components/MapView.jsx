@@ -9,7 +9,7 @@ const MAP_CONFIG = {
   zoom: window.innerWidth < 760 ? 2.4 : 3.5,
   minZoom: 1.5,
   // Zoom stops at roughly district level; anything still stacked is listed in the panel.
-  maxZoom: 9,
+  maxZoom: 10,
   // Cluster clicks zoom in only when the map is zoomed out further than this.
   zoomOnClickBelow: 5,
 };
