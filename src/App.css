@@ -228,7 +228,8 @@ h1 { margin: 4px 0 0; font: 750 24px/1.05 var(--display); font-stretch: 82%; let
 .hover-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--panel); }
 .selected-ring {
   width: 40px; height: 40px; border-radius: 50%; pointer-events: none; z-index: 3;
-  border: 3px solid var(--accent); box-shadow: 0 0 0 2px var(--halo), inset 0 0 0 2px var(--halo);
+  border: 3px solid color-mix(in srgb, var(--clu) 45%, transparent);
+  background: color-mix(in srgb, var(--clu) 12%, transparent);
 }
 .hover-card { display: grid; gap: 3px; pointer-events: none; }
 .hover-card__title { font-weight: 600; }
