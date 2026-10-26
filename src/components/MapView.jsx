@@ -413,12 +413,28 @@ export default function MapView({ events, selected, onSelect, onStack }) {
     if (source) source.setData(toGeoJSON(events, selected?.id));
   }, [events, selected]);
 
+  // A ring marks the chosen event, so it can be found even while it is still inside a cluster bubble.
+  const ringRef = useRef(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!ringRef.current) {
+      const el = document.createElement('div');
+      el.className = 'selected-ring';
+      ringRef.current = new maplibregl.Marker({ element: el });
+    }
+    if (selected) ringRef.current.setLngLat([selected.lng, selected.lat]).addTo(map);
+    else ringRef.current.remove();
+  }, [selected]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!selected || !map) return;
-    if (!map.getBounds().contains([selected.lng, selected.lat]) || map.getZoom() < 5) {
-      map.easeTo({ center: [selected.lng, selected.lat], zoom: Math.max(map.getZoom(), 6) });
-    }
+    // Centre the event in the space left between the panel, the event card and the year strip
+    // (an offset rather than padding, which the map would keep for later moves).
+    const phone = window.innerWidth < 760;
+    const offset = phone ? [0, Math.round(window.innerHeight * 0.21 - 85)] : [20, -15];
+    map.easeTo({ center: [selected.lng, selected.lat], zoom: Math.max(map.getZoom(), 6), offset, duration: 700 });
   }, [selected]);
 
   return <div id="map" ref={containerRef} role="region" aria-label="Map of defence diplomacy events" />;

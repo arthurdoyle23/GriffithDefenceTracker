@@ -94,7 +94,11 @@ export default function App() {
         stacked={!!stack}
         clearStack={() => setStack(null)}
         selectedId={selectedId}
-        onPick={setSelectedId}
+        onPick={(id) => {
+          setSelectedId(id);
+          // On phones the open panel would cover the map, so it folds down to show the chosen event.
+          if (window.innerWidth < 760) setPanelOpen(false);
+        }}
         loadError={loadError}
       />
       {selected && <EventCard event={selected} onClose={() => setSelectedId(null)} />}

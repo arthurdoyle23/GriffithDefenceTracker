@@ -26,6 +26,8 @@ so importing the repository in Netlify needs no other configuration. Netlify the
 
 - `public/data/events.geojson` holds one point per engagement, with the properties `Year`, `Delivering_Country`,
   `Receiving_Countries` (semicolon-separated), `Diplomacy_category` (semicolon-separated), `Comments` and `Source`.
+- Search looks at the description, year, types and partner and host names (full, short or code, e.g. "PNG").
+  A `Source` that isn't a web address (a few rows say "URL Link") is left off the event card.
 - Category spellings are tidied when the data loads (for example "MIL - POL Engagement" becomes "MIL-POL Engagement").
   A row whose category isn't recognised is logged to the browser console. Add new names or aliases in `src/categories.js`.
 - `public/data/world.geojson`, `states.geojson` and `labels.geojson` are the basemap (countries, state borders and place names),

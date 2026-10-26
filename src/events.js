@@ -1,6 +1,10 @@
 import { CATEGORY_BY_NAME, canonicalCategory } from './categories';
+import { partnerInfo } from './partners';
 
 const splitList = (s) => (s ? String(s).split(';').map((x) => x.trim()).filter(Boolean) : []);
+const tidy = (s) => (s ? String(s).replace(/\s+/g, ' ').trim() : '');
+// A few rows hold placeholder text such as "URL Link" instead of a web address.
+const webAddress = (s) => (/^https?:\/\/\S+$/i.test(tidy(s)) ? tidy(s) : '');
 
 // Loads the events GeoJSON and turns each feature into a plain, cleaned record.
 export async function loadEvents() {
@@ -18,19 +22,25 @@ export async function loadEvents() {
         console.warn('Unrecognised category in row', id, p.Diplomacy_category);
       }
       const primary = CATEGORY_BY_NAME[categories[0]];
+      const partners = splitList(p.Delivering_Country);
+      const hosts = splitList(p.Receiving_Countries);
+      const year = parseInt(p.Year, 10) || null;
+      const text = tidy(p.Comments);
+      // Search covers the text, year, types, and partner and host names in full, short and code form (AUS, PNG).
+      const names = [...partners, ...hosts].flatMap((n) => [n, partnerInfo(n).short, partnerInfo(n).code]);
       return {
         id,
         lng: f.geometry.coordinates[0],
         lat: f.geometry.coordinates[1],
-        year: parseInt(p.Year, 10) || null,
-        partners: splitList(p.Delivering_Country),
-        hosts: splitList(p.Receiving_Countries),
+        year,
+        partners,
+        hosts,
         categories,
         icon: primary?.slug ?? 'default',
         family: primary?.family ?? 'eng',
-        text: p.Comments ?? '',
-        source: p.Source ?? '',
-        search: [p.Comments, p.Delivering_Country, p.Receiving_Countries, categories.join(' ')].join(' ').toLowerCase(),
+        text,
+        source: webAddress(p.Source),
+        search: [text, year, ...names, ...categories].join(' ').toLowerCase(),
       };
     });
 }

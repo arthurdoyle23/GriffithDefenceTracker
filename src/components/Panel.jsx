@@ -15,7 +15,12 @@ export default function Panel(props) {
 
   return (
     <aside className={`panel${open ? '' : ' panel--collapsed'}`}>
-      <button className="panel__handle" onClick={() => setOpen(!open)} aria-label="Expand or collapse the panel" />
+      <button
+        className="panel__handle"
+        onClick={() => setOpen(!open)}
+        aria-label="Expand or collapse the panel"
+        aria-expanded={open}
+      />
       <header className="panel__head">
         <div className="brand">
           <img src={`${BASE}icons/Griffith.png`} alt="Griffith University" />
@@ -27,7 +32,8 @@ export default function Panel(props) {
             <span className="error">{loadError}. Refresh to try again.</span>
           ) : (
             <>
-              <b>{visible.length}</b> of {events.length} engagements from <b>{partnerCount}</b> partners,{' '}
+              <b>{visible.length}</b> of {events.length} engagements from <b>{partnerCount}</b>{' '}
+              {partnerCount === 1 ? 'partner' : 'partners'},{' '}
               <span className="nowrap">{year ?? span}</span>
             </>
           )}
@@ -42,7 +48,7 @@ export default function Panel(props) {
         <input
           id="search"
           type="search"
-          placeholder="Search events, e.g. Bushmaster, Kumul, RAMSI"
+          placeholder="Search, e.g. Pukpuk, Bushmaster, Kumul"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoComplete="off"
