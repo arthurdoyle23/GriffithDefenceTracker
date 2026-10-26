@@ -18,6 +18,53 @@ const canHover = window.matchMedia('(hover: hover)').matches;
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
+// Gentle relief shading for the land, worked out in the browser from the free AWS Terrain Tiles
+// (elevation encoded in PNGs). The sea is left clear, so only hills and mountains get depth.
+const TERRAIN_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium';
+const RELIEF = { exaggeration: (z) => 0.8 * 2 ** Math.max(0, (9 - z) * 0.55), shadow: 2.2, light: 1.2 };
+
+async function reliefTile({ url }, abort) {
+  const [z, x, y] = url.slice('relief://'.length).split('/').map(Number);
+  const res = await fetch(`${TERRAIN_URL}/${z}/${x}/${y}.png`, { signal: abort.signal });
+  if (!res.ok) throw new Error(`Terrain tile ${res.status}`);
+  const bitmap = await createImageBitmap(await res.blob());
+  const size = bitmap.width;
+  const canvas = new OffscreenCanvas(size, size);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0);
+  const img = ctx.getImageData(0, 0, size, size);
+  const px = img.data;
+  const height = new Float32Array(size * size);
+  for (let i = 0; i < height.length; i++) height[i] = px[i * 4] * 256 + px[i * 4 + 1] + px[i * 4 + 2] / 256 - 32768;
+
+  // Metres per pixel at this tile's latitude, and light from the north-west, 45 degrees up.
+  const lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / 2 ** z)));
+  const metres = (40075016.7 * Math.cos(lat)) / (size * 2 ** z);
+  const ex = RELIEF.exaggeration(z);
+  const [lx, ly, lz] = [-0.5, 0.5, Math.SQRT1_2];
+  const at = (c, r) => height[Math.min(size - 1, Math.max(0, r)) * size + Math.min(size - 1, Math.max(0, c))];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const i = r * size + c;
+      // Sea, and reefs barely above it, stay clear.
+      if (height[i] <= 2) {
+        px[i * 4 + 3] = 0;
+        continue;
+      }
+      const east = ((at(c + 1, r) - at(c - 1, r)) / (2 * metres)) * ex;
+      const north = ((at(c, r - 1) - at(c, r + 1)) / (2 * metres)) * ex;
+      const shade = (-east * lx - north * ly + lz) / Math.sqrt(east * east + north * north + 1) - lz;
+      const v = shade < 0 ? 0 : 255;
+      px[i * 4] = px[i * 4 + 1] = px[i * 4 + 2] = v;
+      px[i * 4 + 3] = Math.min(255, Math.abs(shade) * (shade < 0 ? RELIEF.shadow : RELIEF.light) * 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const blob = await canvas.convertToBlob({ type: 'image/png' });
+  return { data: await blob.arrayBuffer() };
+}
+maplibregl.addProtocol('relief', reliefTile);
+
 // The basemap is self-hosted Natural Earth data (see scripts/build-basemap.mjs): no tile server, key or quota.
 const baseStyle = () => ({
   version: 8,
@@ -25,6 +72,13 @@ const baseStyle = () => ({
     world: { type: 'geojson', data: `${BASE}data/world.geojson`, attribution: 'Natural Earth' },
     states: { type: 'geojson', data: `${BASE}data/states.geojson` },
     labels: { type: 'geojson', data: `${BASE}data/labels.geojson` },
+    relief: {
+      type: 'raster',
+      tiles: ['relief://{z}/{x}/{y}'],
+      tileSize: 256,
+      maxzoom: 10,
+      attribution: '<a href="https://registry.opendata.aws/terrain-tiles/">Terrain: AWS Terrain Tiles</a>',
+    },
     // Country names get their own copy so each can be nudged clear of the cluster bubbles (see placeCountryLabels).
     'country-labels': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
   },
@@ -35,6 +89,12 @@ const baseStyle = () => ({
       type: 'fill',
       source: 'world',
       paint: { 'fill-color': ['case', ['get', 'host'], css('--host-land'), css('--land')] },
+    },
+    {
+      id: 'relief',
+      type: 'raster',
+      source: 'relief',
+      paint: { 'raster-opacity': Number(css('--relief')) || 0.5, 'raster-fade-duration': 200 },
     },
     {
       id: 'states',
@@ -297,6 +357,7 @@ export default function MapView({ events, selected, onSelect, onStack }) {
       map.setPaintProperty('land', 'fill-color', ['case', ['get', 'host'], css('--host-land'), css('--land')]);
       map.setPaintProperty('states', 'line-color', css('--border'));
       map.setPaintProperty('borders', 'line-color', css('--border-strong'));
+      map.setPaintProperty('relief', 'raster-opacity', Number(css('--relief')) || 0.5);
       map
         .listImages()
         .filter((id) => id.startsWith('lbl|'))

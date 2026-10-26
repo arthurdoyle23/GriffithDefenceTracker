@@ -5,6 +5,7 @@
   --border: #b9d0a0;
   --host-land: #f7e2b0;
   --border-strong: #8fa877;
+  --relief: 0.38;
   --clu: #1f3d73;
   --panel: #ffffff;
   --panel-2: #f3f5f6;
@@ -35,6 +36,7 @@
     --border: #36593f;
     --host-land: #7a6a3c;
     --border-strong: #5f8466;
+    --relief: 0.4;
     --clu: #3f72d6;
     --panel: #131d26;
     --panel-2: #1a2632;
